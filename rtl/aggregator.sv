@@ -1,6 +1,8 @@
 /*
  *TODO flush signal. when reg data not complete, flush siganl...
 */
+`include "tcdm/assign.svh"
+
 module aggregator #(
     parameter int unsigned MAS_DATA_WIDTH = 32,
     parameter int unsigned SLV_DATA_WIDTH = 128,

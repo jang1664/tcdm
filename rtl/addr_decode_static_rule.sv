@@ -27,7 +27,7 @@
 /// if the resulting map is valid. It fatals if `start_addr` is higher than `end_addr`
 /// or if a mapping targets an index that is outside the number of allowed indices.
 /// It issues warnings if the address regions of any two mappings overlap.
-module addr_decode #(
+module addr_decode_static_rule #(
     /// Highest index which can happen in a rule.
     parameter int unsigned               NoIndices  = 32'd0,
     /// Total number of rules.

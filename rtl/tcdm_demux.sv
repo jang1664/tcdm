@@ -1,6 +1,5 @@
 module tcdm_demux
   import mem_pkg::*;
-  import npu_global_params::*;
 #(
     parameter int NR_OUTPUTS = 2,
     parameter int NR_ADDR_MAP_RULES=NR_OUTPUTS,
@@ -47,7 +46,7 @@ module tcdm_demux
     end
   endgenerate
 
-  addr_decode #(
+  addr_decode_static_rule #(
       .NoIndices(NR_OUTPUTS),
       .NoRules(NR_ADDR_MAP_RULES),
       .addr_t(logic [ADDR_WIDTH-1:0]),
