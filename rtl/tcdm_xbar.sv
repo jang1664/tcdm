@@ -9,63 +9,67 @@ module tcdm_xbar
 )(
   input logic clk_i,
   input logic resetn_i,
-  mem_intf.slave master_ports[NUM_MASTER],
-  mem_intf.master slave_ports[NUM_SLAVE]
+
+  // master port
+  input  logic [NUM_MASTER-1:0]                     mas_req_i,
+  output logic [NUM_MASTER-1:0]                     mas_gnt_o,
+  input  logic [NUM_MASTER-1:0][    ADDR_WIDTH-1:0] mas_addr_i,
+  input  logic [NUM_MASTER-1:0]                     mas_wen_i,
+  input  logic [NUM_MASTER-1:0][(DATA_WIDTH/8)-1:0] mas_be_i,
+  input  logic [NUM_MASTER-1:0][    DATA_WIDTH-1:0] mas_data_i,
+  output logic [NUM_MASTER-1:0][    DATA_WIDTH-1:0] mas_r_data_o,
+  output logic [NUM_MASTER-1:0]                     mas_r_valid_o,
+  input  logic [NUM_MASTER-1:0]                     mas_r_ready_i,
+
+  // slave port
+  output  logic [NUM_SLAVE-1:0]                     slv_req_o,
+  input   logic [NUM_SLAVE-1:0]                     slv_gnt_i,
+  output  logic [NUM_SLAVE-1:0][    ADDR_WIDTH-1:0] slv_addr_o,
+  output  logic [NUM_SLAVE-1:0]                     slv_wen_o,
+  output  logic [NUM_SLAVE-1:0][(DATA_WIDTH/8)-1:0] slv_be_o,
+  output  logic [NUM_SLAVE-1:0][    DATA_WIDTH-1:0] slv_data_o,
+  input   logic [NUM_SLAVE-1:0][    DATA_WIDTH-1:0] slv_r_data_i,
+  input   logic [NUM_SLAVE-1:0]                     slv_r_valid_i,
+  output  logic [NUM_SLAVE-1:0]                     slv_r_ready_o
 );
 
-  // demux array
-  typedef addr_map_rule_t [NUM_SLAVE-1:0] addr_map_type;
-  function addr_map_type gen_addr_map();
-    addr_map_type addr_map;
-    for (int i = 0; i < NUM_SLAVE; i++) begin
-      addr_map[i] = '{i, (DATA_WIDTH / 8) * i, (DATA_WIDTH / 8) * (i + 1)};
-    end
-    return addr_map;
-  endfunction
-  localparam addr_map_rule_t [NUM_SLAVE-1:0] ADDR_MAP_RULES = gen_addr_map();
+  // Interface declarations
+  mem_intf #(
+    .DATA_WIDTH(DATA_WIDTH),
+    .ADDR_WIDTH(ADDR_WIDTH)
+  ) master_ports[NUM_MASTER] (.clk(clk_i));
 
-  mem_intf #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) internal[NUM_MASTER*NUM_SLAVE] ( .clk(clk_i));
-  mem_intf #(.DATA_WIDTH(DATA_WIDTH), .ADDR_WIDTH(ADDR_WIDTH)) internal_reshape[NUM_MASTER*NUM_SLAVE] ( .clk(clk_i));
+  mem_intf #(
+    .DATA_WIDTH(DATA_WIDTH),
+    .ADDR_WIDTH(ADDR_WIDTH)
+  ) slave_ports[NUM_SLAVE] (.clk(clk_i));
 
+  // Connect master ports (exploded signals to interface)
   generate
-    for(genvar m=0; m<NUM_MASTER; m++) begin : gen_demux
-      tcdm_demux #(
-        .NR_OUTPUTS(NUM_SLAVE),
-        .NR_ADDR_MAP_RULES(NUM_SLAVE),
-        .DATA_WIDTH(DATA_WIDTH),
-        .ADDR_WIDTH(ADDR_WIDTH),
-        .BE_WIDTH(BE_WIDTH),
-        .INTERLEAVED(1),
-        .OFFSET_ADDR_LSB($clog2(DATA_WIDTH / 8) + 1),
-        .OFFSET_ADDR_MSB($clog2((DATA_WIDTH * NUM_SLAVE) / 8) - 1),
-        .addr_map_rules(ADDR_MAP_RULES)
-      ) u_tcdm_demux(
-        .clk_i(clk_i),
-        .resetn_i(resetn_i),
-        .master_port(master_ports[m]),
-        .slave_ports(internal[m*NUM_SLAVE +: NUM_SLAVE])
-      );
-    end
-
-    for(genvar m=0; m<NUM_MASTER; m++) begin
-      for(genvar s=0; s<NUM_SLAVE; s++) begin
-        `TCDM_ASSIGN_INTF(internal_reshape[s*NUM_MASTER + m], internal[m*NUM_SLAVE + s]);
-      end
-    end
-
-    for(genvar s=0; s<NUM_SLAVE; s++) begin : gen_mux
-      tcdm_mux #(
-        .NUM_MASTER(NUM_MASTER),
-        .DATA_WIDTH(DATA_WIDTH),
-        .ADDR_WIDTH(ADDR_WIDTH),
-        .ExtPrio(0)
-      ) u_tcdm_mux(
-        .clk_i(clk_i),
-        .resetn_i(resetn_i),
-        .tcdm_master_port(internal_reshape[s*NUM_MASTER +: NUM_MASTER]),
-        .tcdm_slave_port(slave_ports[s])
-      );
+    for (genvar m = 0; m < NUM_MASTER; m++) begin : gen_master_connect
+      `TCDM_SLAVE_EXPLODE_IO(master_ports[m], mas, _i[m], _o[m])
     end
   endgenerate
+
+  // Connect slave ports (interface to exploded signals)
+  generate
+    for (genvar s = 0; s < NUM_SLAVE; s++) begin : gen_slave_connect
+      `TCDM_MASTER_EXPLODE_IO(slave_ports[s], slv, _i[s], _o[s])
+    end
+  endgenerate
+
+  // Instantiate the interface-based crossbar
+  tcdm_xbar_intf #(
+    .NUM_MASTER(NUM_MASTER),
+    .NUM_SLAVE(NUM_SLAVE),
+    .DATA_WIDTH(DATA_WIDTH),
+    .ADDR_WIDTH(ADDR_WIDTH),
+    .BE_WIDTH(BE_WIDTH)
+  ) u_tcdm_xbar_intf (
+    .clk_i(clk_i),
+    .resetn_i(resetn_i),
+    .master_ports(master_ports),
+    .slave_ports(slave_ports)
+  );
 
 endmodule
